@@ -1,0 +1,12 @@
+{
+  "id": "dash",
+  "name": "Dash",
+  "version": "0.1.0",
+  "description": "Hand coding work to Dash: start Claude Code tasks in their own git worktrees, wait on them and read what they did.",
+  "skills": [
+    "skills/dash"
+  ],
+  "bin": {
+    "dashctl": "bin/dashctl"
+  }
+}

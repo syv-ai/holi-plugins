@@ -1,0 +1,47 @@
+---
+name: dash
+description: Hand coding work to Dash, which runs Claude Code tasks in their own git worktrees across the user's code projects. Use when the user asks to have something built, fixed or reviewed in one of their repositories, to check on a Dash task, or mentions Dash.
+---
+
+# Dash
+
+Dash is a desktop app on this machine that runs Claude Code across the user's code projects, each
+task in its own git worktree and branch. You don't write the code yourself: you start a Dash task
+with a clear prompt, and the person watches and steers it in Dash.
+
+`dashctl` is on your `PATH`. Run it bare for every command, and `dashctl <namespace> <verb> --help`
+for one command's flags. Results are JSON; a refusal goes to stderr with a non-zero exit.
+
+## Starting work
+
+```sh
+dashctl projects list                        # the projects, with their names and paths
+dashctl tasks create "Fix the flaky login test" --project dash <<'PROMPT'
+The login test fails about one run in five on CI. Find out why and fix it.
+Keep the fix small; don't touch the session code.
+PROMPT
+```
+
+- `--project` takes a project's name, path or id.
+- The prompt comes on stdin; write it as you would brief a colleague who hasn't seen this
+  conversation, with what's done, what isn't, and any links or note paths.
+- The task starts at once. Tell the user its name and that it runs in Dash.
+
+## Following a task
+
+```sh
+dashctl tasks list --project dash
+dashctl tasks wait <task-id> --until idle --timeout-sec 100   # call again if timedOut
+dashctl tasks output <task-id> --lines 80                     # what its terminal shows
+dashctl tasks open <task-id>                                  # bring it up in Dash for the person
+```
+
+`--until` is `idle`, `waiting` (on a person), `not-working` or `change`. Prefer telling the user
+the task is running over waiting on it for long.
+
+## When it fails
+
+- "Dash is not running": ask the user to open Dash.
+- "turn on "Let other agents control Dash"": ask the user to switch it on in Dash's settings
+  (Claude Code, Behavior). Nothing else is needed.
+- A usage error prints the command's line; fix the flags and run it again.

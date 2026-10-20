@@ -1,0 +1,19 @@
+#!/bin/sh
+# dashctl for a Holi vault's agent. It hands every argument to the dashctl
+# Dash writes into its own folder each time it starts, so the commands are
+# always the running Dash's and this file never needs a new release for them.
+# DASH_USER_DATA_DIR points it at another Dash, such as a dev instance.
+set -eu
+if [ -n "${DASH_USER_DATA_DIR:-}" ]; then
+  data=$DASH_USER_DATA_DIR
+elif [ "$(uname -s)" = Darwin ]; then
+  data="$HOME/Library/Application Support/Dash"
+else
+  data="${XDG_CONFIG_HOME:-$HOME/.config}/Dash"
+fi
+real="$data/control/bin/dashctl"
+if [ ! -x "$real" ]; then
+  echo "dashctl: no Dash here that knows dashctl. Install Dash (or update it) and open it once." >&2
+  exit 1
+fi
+exec "$real" "$@"
