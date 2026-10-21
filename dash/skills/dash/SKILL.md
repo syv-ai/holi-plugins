@@ -9,47 +9,33 @@ Dash is a desktop app on this machine that runs Claude Code across the user's co
 task in its own git worktree and branch. You don't write the code yourself: you start a Dash task
 with a clear prompt, and the person watches and steers it in Dash.
 
-`dashctl` is on your `PATH`. Run `dashctl help` for every command, and
-`dashctl <namespace> <verb> --help` for one command's flags. Results are JSON; a refusal goes to
-stderr with a non-zero exit.
+You reach Dash with `dashctl`, which is on your `PATH`. Its commands belong to the running Dash, so
+this skill doesn't list them: `dashctl help` does, and `dashctl <namespace> <verb> --help` gives one
+command's flags. Results are JSON; a refusal goes to stderr with a non-zero exit, and a usage error
+prints the command's line.
 
-## Starting work
+## Before the first command
 
-```sh
-dashctl projects list                        # the projects, with their names and paths
-dashctl tasks create "Fix the flaky login test" --project dash --prompt - <<'PROMPT'
-The login test fails about one run in five on CI. Find out why and fix it.
-Keep the fix small; don't touch the session code.
-PROMPT
-```
+Run `dashctl version`. If it answers with a version, go on. If it says there is no such command,
+this Dash is older than this skill: ask the user to update Dash, and don't guess at its commands.
 
-- `--project` takes a project's name, path or id.
-- `--prompt -` reads the prompt from stdin; without `--prompt` the task starts with none. Write it
-  as you would brief a colleague who hasn't seen this conversation, with what's done, what isn't,
-  and any links or note paths.
-- Check the `session` in the answer. `started`: tell the user the task's name and that it runs in
-  Dash. `needs-trust`: Claude Code wants the project's folder trusted first, which only a person can
-  accept; ask the user to accept the trust prompt in the task in Dash (`dashctl tasks open
-  <task-id>` brings it up). The task starts once they do.
+## Handing over work
 
-## Following a task
-
-```sh
-dashctl tasks list --project dash
-dashctl tasks wait <task-id> --until idle --timeout-sec 100   # call again if timedOut
-dashctl tasks output <task-id> --lines 80                     # what its terminal shows
-dashctl tasks open <task-id>                                  # bring it up in Dash for the person
-```
-
-`--until` is `idle`, `waiting` (on a person), `not-working` or `change`. Prefer telling the user
-the task is running over waiting on it for long.
+- Find the project with `dashctl projects list`, then start a task with `dashctl tasks create`. A
+  flag given as `-` reads its value from stdin, which is how a prompt of several lines goes in.
+- Write the prompt as you would brief a colleague who hasn't seen this conversation: what's done,
+  what isn't, and any links or note paths.
+- The answer says whether the task's session started. If it needs trust, Claude Code wants the
+  project's folder trusted first, which only a person can accept: ask the user to accept it in
+  Dash (`dashctl tasks open` brings the task up). Otherwise tell the user the task's name and that
+  it runs in Dash.
+- Prefer telling the user a task is running over waiting on it for long.
 
 ## When it fails
 
 - "Dash is not running": ask the user to open Dash.
-- "turn on "Let other agents control Dash"": ask the user to switch it on in Dash's settings
+- "turn on "Let other agents control Dash"": ask the user to switch it on in Dash
   (Settings → Claude → Behavior). Nothing else is needed.
-- A usage error prints the command's line; fix the flags and run it again.
 
 ## Feedback about Dash
 
@@ -64,5 +50,4 @@ https://github.com/syv-ai/dash/issues/new?template=agent-feedback.yml&title=<tit
 
 `kind` is one of `Something is missing`, `Something is broken`,
 `A skill or instruction is unclear or wrong`, `Other`. In `context`, name the command involved,
-that you called it from a Holi vault, the Dash version (ask the user: Settings → About in Dash),
-and `claude --version`.
+that you called it from a Holi vault, `dashctl version` and `claude --version`.
