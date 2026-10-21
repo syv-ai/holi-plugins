@@ -45,3 +45,18 @@ the task is running over waiting on it for long.
 - "turn on "Let other agents control Dash"": ask the user to switch it on in Dash's settings
   (Claude Code, Behavior). Nothing else is needed.
 - A usage error prints the command's line; fix the flags and run it again.
+
+## Feedback about Dash
+
+When you miss something in `dashctl` or Dash, or the user has something to say about Dash itself,
+draft a GitHub issue on https://github.com/syv-ai/dash and show it to the user first. The
+repository is public: nothing from the vault goes in it. Give the user this link with each value
+percent-encoded, so the **Agent feedback** form opens filled in for them to submit:
+
+```
+https://github.com/syv-ai/dash/issues/new?template=agent-feedback.yml&title=<title>&kind=<kind>&feedback=<feedback>&context=<context>
+```
+
+`kind` is one of `Something is missing`, `Something is broken`,
+`A skill or instruction is unclear or wrong`, `Other`. In `context`, name the command involved,
+that you called it from a Holi vault, and `claude --version`.
