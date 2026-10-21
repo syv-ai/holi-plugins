@@ -17,9 +17,9 @@ holi-plugins/
 ```
 
 - **The folder name is the plugin's id.** Holi refuses a folder whose manifest names another id.
-- **Everything is relative to the plugin's folder:** `apps`, `skills`, `setup` and `serve`. The
-  folder is the commands' working directory, and a link out of it, to a sibling plugin too, is
-  refused.
+- **Everything is relative to the plugin's folder:** `apps`, `skills`, `bin`, `setup` and
+  `serve`. The folder is the commands' working directory, and a link out of it, to a sibling plugin
+  too, is refused.
 - The manifest's grammar is in Holi's
   [community plugins page](https://github.com/syv-ai/holi/blob/main/docs/features/community-plugins.md).
 
