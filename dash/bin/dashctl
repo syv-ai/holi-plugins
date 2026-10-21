@@ -2,7 +2,8 @@
 # dashctl for a Holi vault's agent. It hands every argument to the dashctl
 # Dash writes into its own folder each time it starts, so the commands are
 # always the running Dash's and this file never needs a new release for them.
-# DASH_USER_DATA_DIR points it at another Dash, such as a dev instance.
+# DASH_USER_DATA_DIR points it at another Dash, such as a dev instance: give it
+# as an absolute path (Dash resolves a relative one against its own folder).
 set -eu
 if [ -n "${DASH_USER_DATA_DIR:-}" ]; then
   data=$DASH_USER_DATA_DIR
