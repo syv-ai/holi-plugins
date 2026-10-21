@@ -14,11 +14,6 @@ this skill doesn't list them: `dashctl help` does, and `dashctl <namespace> <ver
 command's flags. Results are JSON; a refusal goes to stderr with a non-zero exit, and a usage error
 prints the command's line.
 
-## Before the first command
-
-Run `dashctl version`. If it answers with a version, go on. If it says there is no such command,
-this Dash is older than this skill: ask the user to update Dash, and don't guess at its commands.
-
 ## Handing over work
 
 - Find the project with `dashctl projects list`, then start a task with `dashctl tasks create`. A
