@@ -1,0 +1,13 @@
+#!/usr/bin/env node
+// The plugin's command for the vault's agent; the work is in lib/cli.mjs.
+// A dynamic import, so this file runs whether Node reads it as a CommonJS
+// script or as a module, and resolves from the real file when Holi links it.
+import('../lib/cli.mjs').then(
+  async (cli) => {
+    process.exitCode = await cli.main(process.argv.slice(2))
+  },
+  (err) => {
+    process.stderr.write(`bookingctl: ${err.message}\n`)
+    process.exitCode = 1
+  },
+)
