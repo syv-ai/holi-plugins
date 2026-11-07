@@ -27,7 +27,13 @@ when needed, and the person watches and steers it in Dash.
 
 `dashctl` is for what only Dash can do: its projects and tasks, and the agents running in them.
 Everything else you do yourself, with the tools you already have. A task's worktree is an ordinary
-git checkout on this machine, so git, `gh` and the files are yours to use there, as anywhere.
+git checkout on this machine, so you can read it with git, `gh` and the files, as anywhere.
+
+**Changing a task's work is the task's job.** Its agent works from what it knows of its worktree,
+branch and PR. A commit, push, rebase or PR made behind its back leaves it working from a stale
+picture, and the person sees two accounts of the same work. So ask the task to do it, by message.
+Do it yourself only when the task can't (it's stopped and the user wants it done now), and then
+tell the task what you changed, so it isn't surprised the next time it runs.
 
 You reach Dash with `dashctl`, which is on your `PATH`. Its commands belong to the running Dash, so
 this skill doesn't list their flags: `dashctl help` lists every command, and
@@ -86,8 +92,8 @@ can't talk to a task: tell the user to message it in Dash.
 
 ## Finishing
 
-- **Pushing and opening a PR:** when the user asks, do it yourself in the task's worktree with git
-  and `gh`, once the task is idle. Or ask the task to do it, by message.
+- **Pushing and opening a PR:** when the user asks, ask the task to do it, by message. Only if it
+  can't, do it yourself with git and `gh` in its worktree, and tell the task.
 - **Archive** a task the user is done with (`dashctl tasks archive`): its session sleeps and its
   worktree stays, and it can be restored.
 - **Delete** only when the user asks for it. It removes the session and the worktree for good,
