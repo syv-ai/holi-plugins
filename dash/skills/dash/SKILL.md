@@ -23,7 +23,11 @@ when needed, and the person watches and steers it in Dash.
   own Dash skill for what it does there, such as drafting PR reviews and running its dev servers.
   Those are not yours to do.
 
-## The commands
+## dashctl, and everything else
+
+`dashctl` is for what only Dash can do: its projects and tasks, and the agents running in them.
+Everything else you do yourself, with the tools you already have. A task's worktree is an ordinary
+git checkout on this machine, so git, `gh` and the files are yours to use there, as anywhere.
 
 You reach Dash with `dashctl`, which is on your `PATH`. Its commands belong to the running Dash, so
 this skill doesn't list their flags: `dashctl help` lists every command, and
@@ -34,7 +38,7 @@ exit, and a usage error prints the command's line.
 ## Handing over work
 
 - **Find the project** in `dashctl projects list`. If the repository isn't there, ask the user to
-  open it in Dash; you can't add one.
+  open it in Dash. If it isn't on this machine at all, you can clone it for them first.
 - **Start a task** with `dashctl tasks create`. A flag given as `-` reads its value from stdin,
   which is how a prompt of several lines goes in. `--help` covers the choices that matter:
   - **Where it runs:** a new branch (the default), an existing branch, or in place in the
@@ -59,8 +63,8 @@ exit, and a usage error prints the command's line.
   over waiting on it for long.
 - **See what it's doing** with `dashctl tasks output`, the last lines of its terminal.
 - **See what it changed.** `dashctl tasks get` gives the task's branch and worktree path. Read the
-  changes there with git (`git -C <worktree> log`, `diff`) and leave the worktree as it is: the task
-  works in it.
+  changes there with git (`git -C <worktree> log`, `diff`, `status`), and its PR with `gh`. Don't
+  edit or commit in the worktree while the task is working: it works there.
 - **Hand it to the person** with `dashctl tasks open`, which brings Dash to the front on the task.
   Do that when it waits on a person, or when the user wants to look.
 
@@ -82,8 +86,8 @@ can't talk to a task: tell the user to message it in Dash.
 
 ## Finishing
 
-- **Pushing and opening a PR** are not `dashctl` commands: the person does them, in Dash or with
-  git, unless you pushed the branch when creating the task.
+- **Pushing and opening a PR:** when the user asks, do it yourself in the task's worktree with git
+  and `gh`, once the task is idle. Or ask the task to do it, by message.
 - **Archive** a task the user is done with (`dashctl tasks archive`): its session sleeps and its
   worktree stays, and it can be restored.
 - **Delete** only when the user asks for it. It removes the session and the worktree for good,
