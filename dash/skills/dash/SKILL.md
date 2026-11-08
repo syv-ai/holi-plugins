@@ -81,7 +81,8 @@ exit, and a usage error prints the command's line.
   stopped: each task's state first, then every change, a `reply` when a task answers a message
   you sent while watching, and `removed` when a task goes. Run it in the background for the task
   (or project) you care about, and react to its lines. Watching one task, the stream ends once the
-  task is removed.
+  task is removed. A stream that ends with an `{"error":…}` line was cut off, for example because
+  the user turned off access: read it, and see "When it fails".
 - **Or wait in rounds.** `dashctl tasks wait` returns after at most 110 seconds, with
   `timedOut: true` if nothing happened; call it again to keep waiting.
 - Prefer telling the user a task is running over sitting on it for long.
