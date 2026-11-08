@@ -7,7 +7,8 @@ description: Hand coding work to Dash, which runs Claude Code tasks in their own
 
 Dash is a desktop app on this machine that runs Claude Code across the user's code projects. You
 don't write the code yourself: you start a Dash task with a clear prompt, follow it, talk to it
-when needed, and the person watches and steers it in Dash.
+when needed, and the person watches and steers it in Dash. Nobody has to open Dash for any of
+this.
 
 ## How Dash works
 
@@ -47,32 +48,43 @@ exit, and a usage error prints the command's line.
 
 ## Handing over work
 
-- **Find the project** in `dashctl projects list`. If the repository isn't there, ask the user to
-  open it in Dash. If it isn't on this machine at all, you can clone it for them first.
+- **Find the project** in `dashctl projects list`. If the repository isn't there, add it with
+  `dashctl projects add <path>`; if it isn't on this machine at all, clone it first. Adding a
+  folder that already is a project changes nothing.
 - **Start a task** with `dashctl tasks create`. A flag given as `-` reads its value from stdin,
   which is how a prompt of several lines goes in. `--help` covers the choices that matter:
   - **Where it runs:** a new branch (the default in a git project), an existing branch, or in
     place in the project's own folder (the only choice in a folder that isn't a git repository).
     Prefer the default unless the user asked for a branch.
+  - **The issue it's for:** when the work comes from a GitHub issue (or an Azure DevOps work
+    item), pass it, so Dash links it as its New Task dialog does: the issue goes into the task's
+    context, the branch is linked, and Dash comments on the issue. Don't also comment yourself.
   - **Pushing:** a new branch is not pushed unless you ask. Leave it off unless the user wants it
     on the remote.
   - **Permissions:** a task created by an agent never runs with permission prompts off.
 - **Write a complete prompt,** as you would brief a colleague who hasn't seen this conversation:
   what the work is, what's done, what isn't, and what "done" means. Put in the links it needs,
-  such as the GitHub issue's URL or a note's content, since the task can't read this vault. Dash
-  adds one line before your prompt, telling the task it may run unattended, not to ask questions
-  (no `AskUserQuestion`) but to state its assumptions, and to answer messages with `SendMessage`.
-  So the task won't ask what you left out: it will guess.
+  since the task can't read this vault. Dash adds one line before your prompt, telling the task it
+  may run unattended, not to ask questions (no `AskUserQuestion`) but to state its assumptions,
+  and that messages may come from an orchestrator. So the task won't ask what you left out: it
+  will guess.
 - **Check the answer.** `started`: tell the user the task's name and that it runs in Dash.
   `needs-trust`: Claude Code wants the project's folder trusted, which only a person can accept;
   ask the user to accept it in Dash (`dashctl tasks open` brings the task up). The task starts once
   they do.
+- **Link an issue later** with `dashctl tasks link`, if the task already runs. Dash comments on the
+  issue but doesn't link the branch, since that would push it.
 
 ## Following a task
 
-- **Wait in rounds.** `dashctl tasks wait` returns after at most 110 seconds, with `timedOut: true`
-  if nothing happened; call it again to keep waiting. Prefer telling the user a task is running
-  over waiting on it for long.
+- **Watch, don't poll.** `dashctl tasks watch` streams one JSON line per change until it's
+  stopped: each task's state first, then every change, a `reply` when a task answers a message
+  you sent while watching, and `removed` when a task goes. Run it in the background for the task
+  (or project) you care about, and react to its lines. Watching one task, the stream ends once the
+  task is removed.
+- **Or wait in rounds.** `dashctl tasks wait` returns after at most 110 seconds, with
+  `timedOut: true` if nothing happened; call it again to keep waiting.
+- Prefer telling the user a task is running over sitting on it for long.
 - **See what it's doing** with `dashctl tasks output`, the last lines of its terminal.
 - **See what it changed.** `dashctl tasks get` gives the task's worktree path and branch. In a git
   project, read the changes there with git (`git -C <worktree> log`, `diff`, `status`), and its PR
@@ -84,33 +96,42 @@ exit, and a usage error prints the command's line.
 
 ## Talking to a task
 
-Dash doesn't carry messages; Claude Code's own `SendMessage` does.
+`dashctl tasks message <task-id>` sends the task a message, its text on stdin. It works for every
+task, whatever its permission mode, with no click in Dash, and from any harness.
 
-1. `dashctl tasks wake <task-id>` makes sure the task's session runs and returns its
-   `messageAddress`. It returns at once if the session is up; a stopped task is started (with no
-   message) and it returns once the session is up. It can time out with `timedOut: true`: call it
-   again, as with `wait`.
-2. `SendMessage` to that address. The task answers you the same way, so stay in this session
-   until the answer comes: an orchestrator that has exited gets nothing back.
-3. If the task's `messaging` is `needs-approval`, it runs with permission prompts off, so both
-   directions are held. Your message waits until a person clicks Deliver in the task's pane in
-   Dash. The task's reply waits for approval in your own session, which a non-interactive session
-   (`claude -p`) can't give. Tell the user both.
-4. `ENOENT` means the session stopped and its address is gone: `wake` it again for a new one.
+- **Name yourself** with `--from` (for example "Holi agent"), so the task knows who's asking. Add
+  `--no-reply` when you only tell it something.
+- **A stopped task is started first.** You don't need `wake`.
+- **The task sees a header** naming you and the message's id, and whether its last message of the
+  turn is read as the reply. Write the message as you'd write a prompt: complete, since it won't
+  ask back.
+- **Get the reply** with `dashctl tasks reply <task-id> --message-id <id>`, using the `messageId`
+  that `tasks message` returned. It's `pending` until the task has stopped working and answered,
+  then `done` with the text. If you're running `tasks watch`, the `reply` line carries the same
+  text.
+- **`queued: true`** means the task was working when the message arrived. It read the message
+  after its current step, inside the turn already running, so the reply may also cover that
+  earlier work. If that matters, wait until the task is idle and send then.
+- **Send each message once.** An error that says the message may have been delivered means it may
+  have been: don't resend, or the task takes the turn twice. Check with `tasks reply` or
+  `tasks output` instead.
+- **"No inbox known yet"** means the task's session started before this Dash build. Run
+  `dashctl tasks restart <task-id>` (same conversation) and send again.
+- Message ids last until Dash restarts. After that, `tasks reply` no longer knows them: read
+  `tasks output`.
 
 ### When a task can't be reached
 
-A stopped task is not one of these: `wake` starts it, and it takes messages again. A task can't be
-reached when:
+A stopped task is not one of these: `tasks message` starts it. A task can't be reached when:
 
-- you have no `SendMessage` (you run on another harness than Claude Code);
-- it needs trust, or is archived: `wake` is refused until the user accepts trust in Dash, or
+- it needs trust, or is archived: the message is refused until the user accepts trust in Dash, or
   restores it;
-- its `messaging` is `needs-approval` and nobody is there to click Deliver, or your session can't
-  approve its reply.
+- the user's own Claude Code settings set `crossSessionInbound` to `hold` or `refuse`: the message
+  is set aside or dropped without a word, and Dash doesn't override that. If a task never answers,
+  ask the user whether that's set.
 
-Then tell the user, who can message it in Dash. Change its work yourself only if the user wants it
-done now, and tell the task afterwards.
+Then tell the user. Change the task's work yourself only if the user wants it done now, and tell
+the task afterwards, by message, once it can be reached.
 
 ## Finishing
 
@@ -132,6 +153,8 @@ done now, and tell the task afterwards.
   or didn't answer, or Dash had no window to ask in. Ask the user to switch it on in Dash
   (Settings → Claude → Behavior), or to run the call again and answer Allow.
 - "Dash is not running": ask the user to open Dash.
+- "too old to print a stream" from `tasks watch`: the `dashctl` you ran is an older copy. Ask the
+  user to open the current Dash once, which rewrites it.
 
 ## Feedback about Dash
 
