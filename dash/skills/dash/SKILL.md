@@ -61,7 +61,9 @@ exit, and a usage error prints the command's line.
     context, the branch is linked, and Dash comments on the issue. Don't also comment yourself.
   - **Pushing:** a new branch is not pushed unless you ask. Leave it off unless the user wants it
     on the remote.
-  - **Permissions:** a task created by an agent never runs with permission prompts off.
+  - **Permissions:** a task you create starts in Claude Code's auto mode, unless the project sets
+    another mode or you pass one. It never runs with permission prompts off: a project that
+    defaults to bypassPermissions gets auto mode instead.
 - **Write a complete prompt,** as you would brief a colleague who hasn't seen this conversation:
   what the work is, what's done, what isn't, and what "done" means. Put in the links it needs,
   since the task can't read this vault. Dash adds one line before your prompt, telling the task it
@@ -72,8 +74,10 @@ exit, and a usage error prints the command's line.
   `needs-trust`: Claude Code wants the project's folder trusted, which only a person can accept;
   ask the user to accept it in Dash (`dashctl tasks open` brings the task up). The task starts once
   they do.
-- **Link an issue later** with `dashctl tasks link`, if the task already runs. Dash comments on the
-  issue but doesn't link the branch, since that would push it.
+- **Link an issue later** with `dashctl tasks link`, if the task already runs. Dash adds the issue
+  to the task's context and comments on it, but doesn't link the branch, since that would push it.
+  Nothing is sent to the running session: if the task should act on the issue now, tell it by
+  message.
 
 ## Following a task
 
