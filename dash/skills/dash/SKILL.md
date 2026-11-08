@@ -58,7 +58,8 @@ exit, and a usage error prints the command's line.
     Prefer the default unless the user asked for a branch.
   - **The issue it's for:** when the work comes from a GitHub issue (or an Azure DevOps work
     item), pass it, so Dash links it as its New Task dialog does: the issue goes into the task's
-    context, the branch is linked, and Dash comments on the issue. Don't also comment yourself.
+    context and Dash comments on it. The branch is linked on the issue only if it's pushed
+    (`--push-remote`, or an existing branch). Don't also comment yourself.
   - **Pushing:** a new branch is not pushed unless you ask. Leave it off unless the user wants it
     on the remote.
   - **Permissions:** a task you create starts in Claude Code's auto mode, unless the project sets
@@ -86,7 +87,9 @@ exit, and a usage error prints the command's line.
   you sent while watching, and `removed` when a task goes. Run it in the background for the task
   (or project) you care about, and react to its lines. Watching one task, the stream ends once the
   task is removed. A stream that ends with an `{"error":…}` line was cut off, for example because
-  the user turned off access: read it, and see "When it fails".
+  the user turned off access: read it, and see "When it fails". A watch that exits 1 with
+  "the stream ended: Dash stopped" means Dash quit: wait until it's back, then start the watch
+  again.
 - **Or wait in rounds.** `dashctl tasks wait` returns after at most 110 seconds, with
   `timedOut: true` if nothing happened; call it again to keep waiting.
 - Prefer telling the user a task is running over sitting on it for long.
@@ -120,6 +123,9 @@ task, whatever its permission mode, with no click in Dash, and from any harness.
 - **Send each message once.** An error that says the message may have been delivered means it may
   have been: don't resend, or the task takes the turn twice. Check with `tasks reply` or
   `tasks output` instead.
+- **A session that doesn't come up** is the one failure where resending is right. A stopped
+  task's session gets about 30 seconds to start and report its inbox. If it doesn't, the call
+  fails with a 504 and nothing was sent, so send it again.
 - **"No inbox known yet"** means the task's session started before this Dash build. Run
   `dashctl tasks restart <task-id>` (same conversation) and send again.
 - Message ids last until Dash restarts. After that, `tasks reply` no longer knows them: read
@@ -158,8 +164,11 @@ the task afterwards, by message, once it can be reached.
   or didn't answer, or Dash had no window to ask in. Ask the user to switch it on in Dash
   (Settings → Claude → Behavior), or to run the call again and answer Allow.
 - "Dash is not running": ask the user to open Dash.
-- "too old to print a stream" from `tasks watch`: the `dashctl` you ran is an older copy. Ask the
-  user to open the current Dash once, which rewrites it.
+- "too old to print a stream" from `tasks watch`: the `dashctl` you ran is an older copy. Dash
+  rewrites it each time it starts, so ask the user to quit and reopen Dash.
+- Exit 1 with "the answer was cut off: Dash stopped" (or "the stream ended: Dash stopped"): Dash
+  quit while answering. Wait until it's back. Before re-running a `tasks message`, check with
+  `tasks reply` or `tasks output` whether the message got through.
 
 ## Feedback about Dash
 
