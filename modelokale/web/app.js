@@ -83,6 +83,20 @@ function nextHalfHour() {
   const next = Math.ceil((m + 1) / 30) * 30
   return Math.min(Math.max(next, DAY_START * 60), (DAY_END - 1) * 60)
 }
+/** The server takes a start this many minutes ago ("now", picked a minute
+ *  ago) and refuses an older one; the plan draws the same line. */
+const PAST_SLACK = 15
+/** Why the chosen start can no longer be booked: 'day' when no start on the
+ *  chosen day can be, 'time' when only this one has passed; else null. */
+function tooLate() {
+  const now = today()
+  if (state.day > now) return null
+  if (state.day < now) return 'day'
+  const d = new Date()
+  const earliest = d.getHours() * 60 + d.getMinutes() - PAST_SLACK
+  if (DAY_END * 60 - STEP < earliest) return 'day'
+  return state.start < earliest ? 'time' : null
+}
 /** A local day plus minutes after midnight, as a Date. */
 function at(day, minutes) {
   const [y, mo, d] = day.split('-').map(Number)
@@ -276,6 +290,10 @@ function placeOf(room) {
 function roomState(room) {
   if (!state.signedIn) return { cls: 'unknown', text: 'Sign in to see bookings' }
   if (state.bookingsDay !== state.day) return { cls: 'unknown', text: 'Loading…' }
+  // Nothing to book once the start has gone: say so rather than offer it.
+  const late = tooLate()
+  if (late === 'day') return { cls: 'unknown', text: 'Day is over' }
+  if (late === 'time') return { cls: 'unknown', text: 'Time has passed' }
   const { start, end } = slot()
   const clash = state.bookings.find((b) => b.roomId === room.id && overlaps(b, start, end))
   if (!clash) {
@@ -435,6 +453,12 @@ function renderSheet() {
   $('sheetRoom').textContent = shortName(room)
   $('sheetWhen').textContent = ` · ${prettyDay(state.day)}, ${hm(start)}–${hm(end)}`
   $('book').hidden = st.cls !== 'free'
+  const late = tooLate()
+  $('sheetNote').hidden = late === null
+  $('sheetNote').textContent =
+    late === 'day'
+      ? 'No more times to book on this day. Pick another day.'
+      : 'That start has passed. Pick a later one.'
 
   const list = $('sheetDay')
   // The list is drawn anew; a keyboard user keeps their place on its buttons.

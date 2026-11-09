@@ -98,3 +98,46 @@ test('signs out here even when the site does not answer', async () => {
   await auth.signOut()
   assert.equal(await auth.current(), null)
 })
+
+test('renews a session the site refused early, or takes one renewed meanwhile', async () => {
+  const store = await tempStore()
+  const held = tokens({ accessToken: 'old', refreshToken: 'r1' })
+  await store.writeSession(held)
+  let refreshes = 0
+  const auth = createAuth({
+    api: fakeApi({
+      refresh: async () => (refreshes++, tokens({ accessToken: 'new', refreshToken: 'r2' })),
+    }),
+    store,
+  })
+  // Not due for a refresh by its clock, but the site said to sign in again.
+  assert.equal((await auth.renew(held)).accessToken, 'new')
+  // Another caller with the same stale session gets the renewed one, and
+  // the rotated refresh token is not spent again.
+  assert.equal((await auth.renew(held)).accessToken, 'new')
+  assert.equal(refreshes, 1)
+})
+
+test('a renewal the site refuses ends the sign-in here', async () => {
+  const store = await tempStore()
+  const held = tokens()
+  await store.writeSession(held)
+  const auth = createAuth({
+    api: fakeApi({
+      refresh: async () => Promise.reject(new BookingError('rejected', 'Session not found')),
+    }),
+    store,
+  })
+  await assert.rejects(auth.renew(held), { kind: 'auth', message: /has ended/ })
+  assert.equal(await auth.current(), null)
+})
+
+test('drops only the session it was given, never a newer one', async () => {
+  const store = await tempStore()
+  const auth = createAuth({ api: fakeApi(), store })
+  await store.writeSession(tokens({ accessToken: 'newer' }))
+  await auth.drop(tokens({ accessToken: 'older' }))
+  assert.equal((await store.readSession()).accessToken, 'newer')
+  await auth.drop(tokens({ accessToken: 'newer' }))
+  assert.equal(await store.readSession(), null)
+})

@@ -626,6 +626,9 @@ button.time[aria-expanded='true'] {
 .sheet #sheetWhen {
   font-variant-numeric: tabular-nums;
 }
+.sheet .note {
+  margin: 0;
+}
 .day {
   list-style: none;
   margin: 0;

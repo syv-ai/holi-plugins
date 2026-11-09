@@ -52,6 +52,31 @@ export function createBooking({
     )
   const exactOn = (session, day) => api.myBookings(session, day).catch(() => [])
 
+  /**
+   * Run `work` with the session. The site may say to sign in again before the
+   * token runs out (it ended the session, or another client rotated it):
+   * then the session is refreshed once and `work` tried again, and a refresh
+   * the site refuses ends the sign-in here. A renewed session it still
+   * refuses is dropped, so the sign-in never reads as live while every call
+   * fails. A call the site refused as signed out made no change, so trying
+   * it again is safe.
+   */
+  async function withSession(work) {
+    const first = await auth.session()
+    try {
+      return await work(first)
+    } catch (err) {
+      if (!(err instanceof BookingError) || err.kind !== 'auth') throw err
+    }
+    const second = await auth.renew(first)
+    try {
+      return await work(second)
+    } catch (err) {
+      if (err instanceof BookingError && err.kind === 'auth') await auth.drop(second)
+      throw err
+    }
+  }
+
   /** HH:MM on the site's clock. */
   const clock = (iso) => toLocal(new Date(iso), site.timeZone).slice(11, 16)
 
@@ -106,21 +131,23 @@ export function createBooking({
         throw new Refusal('BAD_REQUEST', '`day` is a date, like 2026-11-05')
       }
       return guard(async () => {
-        const [session, rooms] = await Promise.all([auth.session(), api.rooms()])
+        const rooms = await api.rooms()
         const on = day ?? localDay(new Date(now()), site.timeZone)
-        const [days, exact] = await Promise.all([
-          Promise.all(rooms.map((r) => api.schedule(session, r.id, on))),
-          exactOn(session, on),
-        ])
-        return {
-          day: on,
-          rooms: rooms.map((r, i) => ({
-            id: r.id,
-            name: r.name,
-            email: r.email,
-            busy: busyOn(days[i], session, exact),
-          })),
-        }
+        return withSession(async (session) => {
+          const [days, exact] = await Promise.all([
+            Promise.all(rooms.map((r) => api.schedule(session, r.id, on))),
+            exactOn(session, on),
+          ])
+          return {
+            day: on,
+            rooms: rooms.map((r, i) => ({
+              id: r.id,
+              name: r.name,
+              email: r.email,
+              busy: busyOn(days[i], session, exact),
+            })),
+          }
+        })
       })
     },
 
@@ -145,27 +172,28 @@ export function createBooking({
         throw new Refusal('BAD_REQUEST', 'that time has passed')
       }
       return guard(async () => {
-        const [session, rooms] = await Promise.all([auth.session(), api.rooms()])
-        const target = resolveRoom(rooms, room)
+        const target = resolveRoom(await api.rooms(), room)
         const day = localDay(from, site.timeZone)
         if (localDay(new Date(to.getTime() - 1), site.timeZone) !== day) {
           throw new Refusal('BAD_REQUEST', 'a booking starts and ends on the same day')
         }
-        const [slots, exact] = await Promise.all([
-          api.schedule(session, target.id, day),
-          exactOn(session, day),
-        ])
-        const clash = busyOn(slots, session, exact).find(
-          (x) => Date.parse(x.start) < to.getTime() && Date.parse(x.end) > from.getTime(),
-        )
-        if (clash !== undefined) {
-          throw new Refusal(
-            'CONFLICT',
-            `${target.name} is busy from ${clock(clash.start)} to ${clock(clash.end)}`,
-            TAKEN,
+        await withSession(async (session) => {
+          const [slots, exact] = await Promise.all([
+            api.schedule(session, target.id, day),
+            exactOn(session, day),
+          ])
+          const clash = busyOn(slots, session, exact).find(
+            (x) => Date.parse(x.start) < to.getTime() && Date.parse(x.end) > from.getTime(),
           )
-        }
-        await api.createBooking(session, { roomId: target.id, title: name, start: from, end: to })
+          if (clash !== undefined) {
+            throw new Refusal(
+              'CONFLICT',
+              `${target.name} is busy from ${clock(clash.start)} to ${clock(clash.end)}`,
+              TAKEN,
+            )
+          }
+          await api.createBooking(session, { roomId: target.id, title: name, start: from, end: to })
+        })
         return {
           roomId: target.id,
           roomName: target.name,
@@ -184,7 +212,7 @@ export function createBooking({
         throw new Refusal('BAD_REQUEST', '`booking` is a booking id from availability')
       }
       return guard(async () => {
-        await api.cancelBooking(await auth.session(), id)
+        await withSession((session) => api.cancelBooking(session, id))
         return { cancelled: id }
       })
     },

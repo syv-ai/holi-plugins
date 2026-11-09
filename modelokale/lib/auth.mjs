@@ -17,6 +17,29 @@ const REFRESH_EARLY_MS = 5 * 60_000
 const PENDING_MS = 60 * 60_000
 
 export function createAuth({ api, store, now = Date.now }) {
+  async function readHeld() {
+    const cur = await store.readSession()
+    if (cur === null) throw new BookingError('auth', 'not signed in to the booking site')
+    return cur
+  }
+
+  // Refresh `cur`, holding the lock: refresh tokens rotate, so two refreshes
+  // of one token would spend it twice and sign the person out.
+  async function refreshLocked(cur) {
+    try {
+      const renewed = await api.refresh(cur.refreshToken)
+      const kept = { ...renewed, email: renewed.email || cur.email }
+      await store.writeSession(kept)
+      return kept
+    } catch (err) {
+      // A site not answering, or asking to wait, leaves the session be.
+      if (!(err instanceof BookingError)) throw err
+      if (err.kind === 'network' || err.kind === 'rate-limited') throw err
+      await store.clearSession()
+      throw new BookingError('auth', `the booking sign-in has ended (${err.message})`)
+    }
+  }
+
   return {
     /** The signed-in person, or null. */
     async current() {
@@ -76,21 +99,29 @@ export function createAuth({ api, store, now = Date.now }) {
       return store.withLock(async () => {
         // Read again under the lock: another process may have renewed it, or
         // signed out, while this one waited.
+        const cur = await readHeld()
+        return cur.expiresAt - now() > REFRESH_EARLY_MS ? cur : refreshLocked(cur)
+      })
+    },
+
+    /** The site refused `stale` as signed out, though it had not run out: the
+     *  site may have ended it early, or another client rotated it. Refresh
+     *  once, whatever its time; a refused refresh ends the sign-in here too,
+     *  so `status` and Holi's readiness check stop saying signed in. */
+    async renew(stale) {
+      return store.withLock(async () => {
+        const cur = await readHeld()
+        // Another process renewed it meanwhile: that one is worth a try first.
+        return cur.accessToken !== stale.accessToken ? cur : refreshLocked(cur)
+      })
+    },
+
+    /** The site refused even a just-renewed `session`: the sign-in is over.
+     *  Only that session is dropped, never a newer one written meanwhile. */
+    async drop(session) {
+      await store.withLock(async () => {
         const cur = await store.readSession()
-        if (cur === null) throw new BookingError('auth', 'not signed in to the booking site')
-        if (cur.expiresAt - now() > REFRESH_EARLY_MS) return cur
-        try {
-          const renewed = await api.refresh(cur.refreshToken)
-          const kept = { ...renewed, email: renewed.email || cur.email }
-          await store.writeSession(kept)
-          return kept
-        } catch (err) {
-          // A site not answering, or asking to wait, leaves the session be.
-          if (!(err instanceof BookingError)) throw err
-          if (err.kind === 'network' || err.kind === 'rate-limited') throw err
-          await store.clearSession()
-          throw new BookingError('auth', `the booking sign-in has ended (${err.message})`)
-        }
+        if (cur !== null && cur.accessToken === session.accessToken) await store.clearSession()
       })
     },
 

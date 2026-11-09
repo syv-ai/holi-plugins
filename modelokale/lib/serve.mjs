@@ -55,17 +55,8 @@ export function createPlanServer({ port, booking = createBooking() }) {
   const hosts = new Set([`localhost:${port}`, `127.0.0.1:${port}`, `[::1]:${port}`])
   const origins = new Set([...hosts].map((h) => `http://${h}`))
 
-  return createServer(async (req, res) => {
-    const send = (status, body, type = 'application/json; charset=utf-8') => {
-      res.writeHead(status, {
-        'Content-Type': type,
-        'Cache-Control': 'no-store',
-        'X-Content-Type-Options': 'nosniff',
-        'Content-Security-Policy': CSP,
-        'Referrer-Policy': 'no-referrer',
-      })
-      res.end(typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body))
-    }
+  async function handle(req, res) {
+    const send = (status, body, type) => answer(res, status, body, type)
     if (!hosts.has(req.headers.host ?? '')) return send(421, { error: 'wrong host' })
     const origin = req.headers.origin
     if (origin !== undefined && !origins.has(origin)) return send(403, { error: 'wrong origin' })
@@ -102,7 +93,28 @@ export function createPlanServer({ port, booking = createBooking() }) {
     const file = FILES[path]
     if (file === undefined || req.method !== 'GET') return send(404, 'not found', 'text/plain')
     send(200, await readFile(new URL(file[0], WEB)), file[1])
+  }
+
+  // Whatever one request does wrong (a request line that is no URL, say), it
+  // gets its own answer and the server stays up for the plan: an exception
+  // here would otherwise end the process, and the tab with it.
+  return createServer((req, res) => {
+    handle(req, res).catch(() => {
+      if (res.headersSent) res.destroy()
+      else answer(res, 400, { error: 'bad request' })
+    })
   })
+}
+
+function answer(res, status, body, type = 'application/json; charset=utf-8') {
+  res.writeHead(status, {
+    'Content-Type': type,
+    'Cache-Control': 'no-store',
+    'X-Content-Type-Options': 'nosniff',
+    'Content-Security-Policy': CSP,
+    'Referrer-Policy': 'no-referrer',
+  })
+  res.end(typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body))
 }
 
 async function readBody(req) {

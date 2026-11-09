@@ -118,3 +118,57 @@ test('cancels by booking id, and refuses anything else', async () => {
   assert.deepEqual(cancelled, ['b1'])
   await assert.rejects(booking.cancel('../x'), { code: 'BAD_REQUEST' })
 })
+
+/** The real sign-in over a temporary folder, and a site whose routes say
+ *  "sign in again" to the access tokens in `refused`. */
+async function siteThatEndsSessions({ refused, refresh }) {
+  const store = await tempStore()
+  await store.writeSession(tokens({ accessToken: 'a1', refreshToken: 'r1' }))
+  const made = []
+  const check = (s) => {
+    if (refused.has(s.accessToken))
+      throw new BookingError('auth', 'the booking site asked to sign in again')
+  }
+  const api = {
+    rooms: async () => ROOMS,
+    schedule: async (s, _r, d) => (check(s), day(d)),
+    myBookings: async () => [],
+    createBooking: async (s, b) => (check(s), made.push(b)),
+    cancelBooking: async (s) => check(s),
+    refresh,
+  }
+  const booking = createBooking({ site: SITE, api, store, now: () => NOW })
+  return { booking, store, made }
+}
+
+test('a session the site ended early is renewed once and the call made again', async () => {
+  const { booking, store, made } = await siteThatEndsSessions({
+    refused: new Set(['a1']),
+    refresh: async () => tokens({ accessToken: 'a2', refreshToken: 'r2' }),
+  })
+  await booking.book({
+    room: '2',
+    start: '2026-11-05T10:00:00+01:00',
+    end: '2026-11-05T10:30:00+01:00',
+  })
+  assert.equal(made.length, 1)
+  assert.equal((await store.readSession()).accessToken, 'a2')
+})
+
+test('a session the site will not renew reads as signed out', async () => {
+  const { booking } = await siteThatEndsSessions({
+    refused: new Set(['a1']),
+    refresh: async () => Promise.reject(new BookingError('rejected', 'Session not found')),
+  })
+  await assert.rejects(booking.cancel('b1'), { code: 'UNAUTHORIZED', next: /bookingctl login/ })
+  assert.equal((await booking.status()).signedIn, false)
+})
+
+test('a renewed session the site still refuses is dropped, not kept as live', async () => {
+  const { booking } = await siteThatEndsSessions({
+    refused: new Set(['a1', 'a2']),
+    refresh: async () => tokens({ accessToken: 'a2', refreshToken: 'r2' }),
+  })
+  await assert.rejects(booking.availability('2026-11-05'), { code: 'UNAUTHORIZED' })
+  assert.equal((await booking.status()).signedIn, false)
+})

@@ -65,3 +65,18 @@ test('answers no other page, host or kind of request', async () => {
   assert.equal((await send('/lib/site.mjs', { method: 'GET' })).status, 404)
   assert.equal((await send('/api/nope', { headers: CALL })).status, 404)
 })
+
+test('a request it cannot read gets a 400, and the server stays up', async () => {
+  const { connect } = await import('node:net')
+  const first = await new Promise((resolve, reject) => {
+    const s = connect(port, '127.0.0.1', () =>
+      s.write(`GET //[ HTTP/1.1\r\nHost: localhost:${port}\r\nConnection: close\r\n\r\n`),
+    )
+    let text = ''
+    s.on('data', (d) => (text += d))
+    s.on('end', () => resolve(text.split('\r\n')[0]))
+    s.on('error', reject)
+  })
+  assert.equal(first, 'HTTP/1.1 400 Bad Request')
+  assert.equal((await send('/', { method: 'GET' })).status, 200)
+})

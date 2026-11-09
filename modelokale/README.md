@@ -48,6 +48,10 @@ when you are not signed in.
   from your bookings list.
 - **Token refresh:** access tokens refresh five minutes before they run out, under a lock the
   plan's server and `bookingctl` share, because refresh tokens rotate.
+- **A session the site ends early:** when the site says to sign in again before the token runs
+  out, the plugin refreshes once and retries the call. If the site refuses the refresh, or refuses
+  the renewed session too, the sign-in is dropped on this machine. So `bookingctl status` and
+  Holi's readiness check, which read only this machine's files, say signed out after that call.
 
 ## The plan's server
 
