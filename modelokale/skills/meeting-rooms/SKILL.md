@@ -10,26 +10,30 @@ the booking site as the user on this machine. Everything prints text; add
 `--json` for JSON.
 
 ```sh
-bookingctl status                      # signed in? as whom
-bookingctl rooms                       # name, mailbox, id
-bookingctl availability [YYYY-MM-DD]   # every room's busy times that day (today)
-bookingctl book <room> <start> <end>   # books it, titled "Meeting"
-bookingctl cancel <booking id>         # one of the user's own bookings
-bookingctl plan                        # creates Rooms.local.booking, the room plan
+bookingctl status                        # signed in? as whom
+bookingctl rooms                         # name, mailbox, id
+bookingctl availability [YYYY-MM-DD]     # every room's busy times that day (today)
+bookingctl book <room> --at 13:00 [--for 15m] [--on fri] [--title <title>]
+bookingctl cancel <room> --at 13:00 [--on fri]   # the user's own booking there then
+bookingctl cancel <booking id>           # or by the id availability shows
+bookingctl plan                          # creates Rooms.local.booking, the room plan
 ```
 
 - `<room>` is a name (`"Garage 2"`), a number (`2`), a mailbox or an id.
-- `book` takes ISO instants **with an offset**: `2026-11-05T10:00:00+01:00`.
-  Use the offset in force on the booking's day, not today's: `date +%z` is
-  today's, and Copenhagen is `+01:00` in winter but `+02:00` from the last
-  Sunday of March to the last Sunday of October. Never send a bare local time.
+- `--at` is a time on the office's clock (Copenhagen time), such as `13:00`, or
+  `now`. Write the time the user means at the office; never work out an offset.
+- `--on` is the day: a date (`2026-11-12`), `tomorrow` or a weekday (`fri`, the
+  next one, today included). Leave it out for today.
+- `--for` is the length: `15m`, `1h`, `1h30m`. Leave it out for 30 minutes.
+- A time today that has already passed is refused with `has passed today`; ask
+  the user which day they mean rather than adding `--on` yourself.
 - `availability` prints times on the office's clock (Copenhagen time), and
   shows every booking, other companies' and Outlook's included.
 - Check `bookingctl availability <day>` before you book, and tell the user what
   you are about to book. `book` refuses a slot the schedule shows taken, and a
   booking must start and end on the same day.
 - `availability` marks the user's own bookings `(yours, id …)`; that id is
-  what `cancel` takes. Say which booking you are about to cancel first.
+  what `cancel <booking id>` takes. Say which booking you are about to cancel first.
 - A refusal prints `error (CODE): why` and often `next:`, what to do about it.
 
 ## The rooms

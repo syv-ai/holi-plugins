@@ -105,6 +105,32 @@ test("shows every room's day, mine at their exact times", async () => {
   assert.deepEqual(a.rooms[1].busy, [])
 })
 
+test("cancels my booking of a room by a time it runs at, and nobody else's", async () => {
+  const mine = { id: 'b1', title: 'Meeting', organizer_email: 'me@example.test' }
+  const theirs = { id: 'b2', title: 'Theirs', organizer_email: 'them@example.test' }
+  const { booking, cancelled } = await setup({
+    schedule: (roomId, d) =>
+      roomId === 'room-4' ? day(d, { '13:30': mine, '14:00': mine, '15:00': theirs }) : day(d),
+    exact: [{ id: 'b1', start: '2026-11-05T12:30:00.000Z', end: '2026-11-05T13:15:00.000Z' }],
+  })
+  const at = (hhmm) => new Date(`2026-11-05T${hhmm}:00+01:00`)
+  assert.deepEqual(await booking.cancelAt({ room: 'garage 4', at: at('13:45') }), {
+    cancelled: 'b1',
+    roomName: 'Garage 4 – (MuteBox)',
+    start: '2026-11-05T12:30:00.000Z',
+    end: '2026-11-05T13:15:00.000Z',
+  })
+  assert.deepEqual(cancelled, ['b1'])
+  await assert.rejects(booking.cancelAt({ room: 'garage 4', at: at('15:00') }), {
+    code: 'NOT_FOUND',
+    message: /no booking of Garage 4 – \(MuteBox\) at 15:00 on 2026-11-05/,
+  })
+  await assert.rejects(booking.cancelAt({ room: 'garage 4', at: at('14:15') }), {
+    code: 'NOT_FOUND',
+  })
+  assert.deepEqual(cancelled, ['b1'])
+})
+
 test('a lost sign-in tells the agent to sign in again', async () => {
   const { booking } = await setup({
     auth: { session: async () => Promise.reject(new BookingError('auth', 'not signed in')) },

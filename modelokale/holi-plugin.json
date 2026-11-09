@@ -12,5 +12,19 @@
   "check": {
     "run": ["node", "bin/bookingctl", "status", "--check"],
     "hint": "Sign in to the booking site: open Rooms.local.booking, or ask the agent to run bookingctl login"
+  },
+  "cli": {
+    "run": ["node", "bin/bookingctl"],
+    "verbs": {
+      "status": "Signed in to the booking site? As whom",
+      "login": "Email a login link: login <email>",
+      "finish": "Sign in with the link from that email: finish '<link>'",
+      "logout": "Sign out on this machine",
+      "rooms": "The rooms: name, mailbox, id",
+      "availability": "Every room's busy times on a day, today unless given: availability [YYYY-MM-DD]",
+      "book": "Book a room: book <room> --at 13:00 [--for 15m] [--on fri] [--title <title>]",
+      "cancel": "Cancel your booking: cancel <room> --at 13:00 [--on fri], or cancel <booking id>",
+      "plan": "Create Rooms.local.booking, the room plan, in the vault"
+    }
   }
 }

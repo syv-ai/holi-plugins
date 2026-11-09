@@ -12,7 +12,7 @@ import { createStore } from './store.mjs'
 /** The longest one booking may run. */
 const MAX_BOOKING_MS = 12 * 60 * 60_000
 /** A booking may start this far in the past: "now" typed a minute ago. */
-const PAST_SLACK_MS = 15 * 60_000
+export const PAST_SLACK_MS = 15 * 60_000
 /** What the site is told a booking is called: it wants a title, and the room
  *  and the time say the rest. */
 const DEFAULT_TITLE = 'Meeting'
@@ -92,6 +92,33 @@ export function createBooking({
     }
   }
 
+  /** Every room's busy times on one of the site's days, today by default:
+   *  every company's bookings and the rooms' Outlook events. */
+  async function availability(day) {
+    if (day !== undefined && day !== null && !/^\d{4}-\d{2}-\d{2}$/.test(day)) {
+      throw new Refusal('BAD_REQUEST', '`day` is a date, like 2026-11-05')
+    }
+    return guard(async () => {
+      const rooms = await api.rooms()
+      const on = day ?? localDay(new Date(now()), site.timeZone)
+      return withSession(async (session) => {
+        const [days, exact] = await Promise.all([
+          Promise.all(rooms.map((r) => api.schedule(session, r.id, on))),
+          exactOn(session, on),
+        ])
+        return {
+          day: on,
+          rooms: rooms.map((r, i) => ({
+            id: r.id,
+            name: r.name,
+            email: r.email,
+            busy: busyOn(days[i], session, exact),
+          })),
+        }
+      })
+    })
+  }
+
   return {
     clock,
     timeZone: site.timeZone,
@@ -124,32 +151,7 @@ export function createBooking({
     /** The bookable rooms. Needs no sign-in. */
     rooms: () => guard(() => api.rooms()),
 
-    /** Every room's busy times on one of the site's days, today by default:
-     *  every company's bookings and the rooms' Outlook events. */
-    async availability(day) {
-      if (day !== undefined && day !== null && !/^\d{4}-\d{2}-\d{2}$/.test(day)) {
-        throw new Refusal('BAD_REQUEST', '`day` is a date, like 2026-11-05')
-      }
-      return guard(async () => {
-        const rooms = await api.rooms()
-        const on = day ?? localDay(new Date(now()), site.timeZone)
-        return withSession(async (session) => {
-          const [days, exact] = await Promise.all([
-            Promise.all(rooms.map((r) => api.schedule(session, r.id, on))),
-            exactOn(session, on),
-          ])
-          return {
-            day: on,
-            rooms: rooms.map((r, i) => ({
-              id: r.id,
-              name: r.name,
-              email: r.email,
-              busy: busyOn(days[i], session, exact),
-            })),
-          }
-        })
-      })
-    },
+    availability,
 
     /** Book `room` (id, mailbox, name or number) from `start` to `end`, ISO
      *  instants with an offset. Refused when the room's schedule shows it
@@ -203,6 +205,36 @@ export function createBooking({
           title: name,
         }
       })
+    },
+
+    /** Cancel the person's own booking of `room` that runs at `at`, an
+     *  instant: the one `availability` shows there, found by its time. */
+    async cancelAt({ room, at }) {
+      if (typeof room !== 'string' || room.trim() === '') {
+        throw new Refusal('BAD_REQUEST', '`room` is required')
+      }
+      const day = localDay(at, site.timeZone)
+      const { rooms } = await availability(day)
+      const target = resolveRoom(rooms, room)
+      const mine = target.busy.filter(
+        (b) => b.mine && Date.parse(b.start) <= at.getTime() && at.getTime() < Date.parse(b.end),
+      )
+      const when = `${clock(at.toISOString())} on ${day}`
+      if (mine.length === 0)
+        throw new Refusal(
+          'NOT_FOUND',
+          `you have no booking of ${target.name} at ${when}`,
+          `read \`bookingctl availability ${day}\` for your bookings, marked (yours)`,
+        )
+      if (mine.length > 1 || mine[0].bookingId === undefined || mine[0].bookingId === null)
+        throw new Refusal(
+          'CONFLICT',
+          `the site does not say which booking of ${target.name} at ${when} is yours`,
+          `cancel it by its id from \`bookingctl availability ${day}\`, or on the room plan`,
+        )
+      const id = mine[0].bookingId
+      await guard(() => withSession((session) => api.cancelBooking(session, id)))
+      return { cancelled: id, roomName: target.name, start: mine[0].start, end: mine[0].end }
     },
 
     /** Cancel one of the person's bookings by the id `availability` gives. */

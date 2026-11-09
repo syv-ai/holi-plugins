@@ -9,7 +9,18 @@ Books the office's meeting rooms (Garage 1–6 at
   vault.
 - **`bookingctl` for the vault's agent**, with the `meeting-rooms` skill:
   `status`, `login`, `finish`, `logout`, `rooms`, `availability`, `book`, `cancel` and `plan`.
-  Each call asks for permission like any other command until you allow it.
+  Each call asks for permission like any other command until you allow it. The same verbs are
+  `holi plugin modelokale <verb>` in a Holi that has plugin verbs, so you can type them too:
+
+  ```sh
+  holi plugin modelokale book "Garage 4" --at 13:00 --for 15m     # today, 13:00–13:15
+  holi plugin modelokale book "Garage 2" --at 10 --for 1h --on fri
+  holi plugin modelokale cancel "Garage 4" --at 13:00
+  ```
+
+  A time is on the office's clock and today unless `--on` names a day (a date, `tomorrow` or a
+  weekday, the next one); a booking runs 30 minutes unless `--for` says. A time today that has
+  already passed is refused rather than moved to tomorrow.
 
 It needs Node 20.19 or newer on Holi's `PATH`, and nothing else: there is no setup step and no
 dependencies.
@@ -42,8 +53,9 @@ when you are not signed in.
   (`/api/rooms/{id}/schedule`, `/api/bookings`), with your session as the site's cookie. A
   booking made this way also lands in the room's Outlook calendar.
 - **Times:** the site speaks its own wall clock (`Europe/Oslo`, Copenhagen's time), which
-  `lib/clock.mjs` converts with `Intl`. `book` takes instants with an offset, never a bare local
-  time.
+  `lib/clock.mjs` converts with `Intl`. `book --at 13:00` reads the time on that clock
+  (`lib/when.mjs`), so it means 13:00 at the office in winter and summer alike, whatever zone this
+  machine is in. The older `book <room> <start> <end>` still takes instants with an offset.
 - **Exact times:** the schedule knows only half hours, so your own bookings take their exact times
   from your bookings list.
 - **Token refresh:** access tokens refresh five minutes before they run out, under a lock the
@@ -74,6 +86,7 @@ So another web page on this machine cannot use your sign-in.
 - `lib/site.mjs`: the site's origin, public key and time zone.
 - `lib/api.mjs`: the HTTP client, with no state.
 - `lib/clock.mjs`: the site's wall clock.
+- `lib/when.mjs`: `--at`, `--for` and `--on`, read on that clock.
 - `lib/schedule.mjs`: folding slots into busy intervals.
 - `lib/store.mjs`: this machine's files and their lock.
 - `lib/auth.mjs`: PKCE sign-in and refresh.

@@ -4,7 +4,9 @@
 import { writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
+import { parseArgs } from 'node:util'
 import { createBooking, Refusal } from './booking.mjs'
+import { bookingTime, startOf } from './when.mjs'
 
 /** The file the plan opens from: `.local.` so it stays on this machine, as
  *  the sign-in does, and never syncs to members without the plugin. */
@@ -18,12 +20,41 @@ const USAGE = `bookingctl: see, book and cancel the office meeting rooms (bookin
   bookingctl logout                      sign out on this machine
   bookingctl rooms                       name, mailbox, id
   bookingctl availability [YYYY-MM-DD]   every room's busy times that day (today)
-  bookingctl book <room> <start> <end> [title]
-                                         start and end are ISO instants with an offset
+  bookingctl book <room> --at <time> [--for <length>] [--on <day>] [--title <title>]
+                                         --at 13:00 or now, on the office's clock
+                                         --for 15m, 1h or 1h30m (30m)
+                                         --on 2026-11-12, tomorrow or fri (today)
   bookingctl cancel <booking id>         one of your own bookings
+  bookingctl cancel <room> --at <time> [--on <day>]
+                                         your booking of that room then
   bookingctl plan [vault folder]         create ${PLAN_FILE}, the room plan
 
 Add --json for JSON.`
+
+/**
+ * Read a verb's flags: `--room` may also be the one word without a flag.
+ * Null when none is given, for the older form of the verb.
+ */
+function flagsOf(args, options) {
+  if (!args.some((a) => a.startsWith('--'))) return null
+  let parsed
+  try {
+    parsed = parseArgs({ args, options, allowPositionals: true, strict: true })
+  } catch (e) {
+    throw new Refusal('BAD_REQUEST', e.message)
+  }
+  const { values, positionals } = parsed
+  if (positionals.length > 1 || (positionals.length === 1 && values.room !== undefined))
+    throw new Refusal('BAD_REQUEST', `unexpected argument: ${positionals.at(-1)}`)
+  return { ...values, room: values.room ?? positionals[0] }
+}
+
+const WHEN = { room: { type: 'string' }, at: { type: 'string' }, on: { type: 'string' } }
+
+const needAt = (flags) => {
+  if (flags.at === undefined)
+    throw new Refusal('BAD_REQUEST', '`--at` is required: a time like 13:00, or now')
+}
 
 export async function main(argv, deps = {}) {
   const out = deps.out ?? ((s) => process.stdout.write(`${s}\n`))
@@ -32,6 +63,8 @@ export async function main(argv, deps = {}) {
   const check = argv.includes('--check')
   const [verb, ...args] = argv.filter((a) => a !== '--json' && a !== '--check')
   const booking = deps.booking ?? createBooking()
+  const now = deps.now ?? Date.now
+  const clockNow = () => ({ now: now(), timeZone: booking.timeZone })
   const print = (value, text) => out(json ? JSON.stringify(value, null, 2) : text(value))
 
   try {
@@ -80,13 +113,30 @@ export async function main(argv, deps = {}) {
         return 0
       }
       case 'book': {
-        const [room, start, end, ...title] = args
-        const made = await booking.book({
-          room,
-          start,
-          end,
-          ...(title.length > 0 ? { title: title.join(' ') } : {}),
+        const flags = flagsOf(args, {
+          ...WHEN,
+          for: { type: 'string' },
+          title: { type: 'string' },
         })
+        let request
+        if (flags === null) {
+          // The older form: ISO instants with an offset, and a title after.
+          const [room, start, end, ...title] = args
+          request = { room, start, end, ...(title.length > 0 ? { title: title.join(' ') } : {}) }
+        } else {
+          needAt(flags)
+          const { start, end } = bookingTime(
+            { at: flags.at, length: flags.for, on: flags.on },
+            clockNow(),
+          )
+          request = {
+            room: flags.room,
+            start: start.toISOString(),
+            end: end.toISOString(),
+            ...(flags.title === undefined ? {} : { title: flags.title }),
+          }
+        }
+        const made = await booking.book(request)
         print(
           made,
           (v) =>
@@ -95,8 +145,20 @@ export async function main(argv, deps = {}) {
         return 0
       }
       case 'cancel': {
-        const r = await booking.cancel(args[0])
-        print(r, (v) => `cancelled booking ${v.cancelled}`)
+        const flags = flagsOf(args, WHEN)
+        if (flags === null) {
+          const r = await booking.cancel(args[0])
+          print(r, (v) => `cancelled booking ${v.cancelled}`)
+          return 0
+        }
+        needAt(flags)
+        const at = startOf({ at: flags.at, on: flags.on }, clockNow())
+        const r = await booking.cancelAt({ room: flags.room, at })
+        print(
+          r,
+          (v) =>
+            `cancelled your booking of ${v.roomName}, ${booking.clock(v.start)}–${booking.clock(v.end)}`,
+        )
         return 0
       }
       case 'plan': {
