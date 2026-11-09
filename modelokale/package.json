@@ -1,0 +1,11 @@
+{
+  "name": "holi-plugin-modelokale",
+  "private": true,
+  "description": "Mødelokale Booking, a Holi community plugin",
+  "engines": {
+    "node": ">=20.19"
+  },
+  "scripts": {
+    "test": "node --test"
+  }
+}

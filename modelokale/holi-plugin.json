@@ -1,0 +1,16 @@
+{
+  "id": "modelokale",
+  "name": "Mødelokale Booking",
+  "version": "0.1.0",
+  "description": "See, book and cancel the office meeting rooms at booking.birdsatfive.dk: a room plan in a tab, and bookingctl for the vault's agent.",
+  "opens": ["*.booking"],
+  "serve": ["node", "lib/serve.mjs", "--port", "{port}"],
+  "skills": ["skills/meeting-rooms"],
+  "bin": {
+    "bookingctl": "bin/bookingctl"
+  },
+  "check": {
+    "run": ["node", "bin/bookingctl", "status", "--check"],
+    "hint": "Sign in to the booking site: open Rooms.local.booking, or ask the agent to run bookingctl login"
+  }
+}
