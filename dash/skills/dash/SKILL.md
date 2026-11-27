@@ -65,6 +65,16 @@ exit, and a usage error prints the command's line.
   - **Permissions:** a task you create starts in Claude Code's auto mode, unless the project sets
     another mode or you pass one. It never runs with permission prompts off: a project that
     defaults to bypassPermissions gets auto mode instead.
+  - **How its session launches:** an effort level (Claude Code's levels, or `ultracode`; without
+    one, Dash's own setting), a custom agent to run as (one of the project's, the user's or an
+    enabled plugin's; an unknown name is refused with the list of known ones, and it's fixed for
+    the task), extra folders the session may read and edit (`--add-dir`, once per folder), and
+    extra `claude` flags as one quoted line. Leave folders and flags off and the task gets the
+    project's own defaults. Flags Dash sets itself (permissions, model, effort, agent, settings)
+    are refused. Flags that loosen the task's checks, such as `--allowedTools` or `--mcp-config`,
+    go through from you but not from another task: pass them only when the user asked for them.
+    Claude Code must trust each extra folder, so one it doesn't yet trust leaves the task
+    `needs-trust` until the user accepts it in Dash.
 - **Write a complete prompt,** as you would brief a colleague who hasn't seen this conversation:
   what the work is, what's done, what isn't, and what "done" means. Put in the links it needs,
   since the task can't read this vault. Dash adds one line before your prompt, telling the task it
@@ -75,10 +85,26 @@ exit, and a usage error prints the command's line.
   `needs-trust`: Claude Code wants the project's folder trusted, which only a person can accept;
   ask the user to accept it in Dash (`dashctl tasks open` brings the task up). The task starts once
   they do.
+- **Change how a task launches later** with `dashctl tasks configure`: its effort (`default` goes
+  back to Dash's setting), its folders (the whole list each time; `--add-dir ''` for none) or its
+  extra flags (`''` for none). Only what you give changes, and the same checks apply as at create.
+  A task with a session restarts it, resuming the same conversation, so don't do it mid-turn
+  unless the user wants that. The answer's `restarted` is `false` when the task had no session
+  yet (it launches with them next time) or when a new folder needs trust (the task is then
+  `needs-trust`: ask the user to accept it in Dash). The agent and model can't be changed this way.
 - **Link an issue later** with `dashctl tasks link`, if the task already runs. Dash adds the issue
   to the task's context and comments on it, but doesn't link the branch, since that would push it.
   Nothing is sent to the running session: if the task should act on the issue now, tell it by
   message.
+
+- **A project's session settings** are in `dashctl projects list` (`appendSystemPrompt`,
+  `extraArgsDefault`, `addDirsDefault`) and change with `dashctl projects configure`. The appended
+  system prompt goes to every task in the project and lives in the repository's
+  `.dash/config.json`, which is shared through git; the folder and flag defaults are the user's
+  own (`.dash/config.local.json`, kept out of git) and apply to tasks created after. Only what you
+  give changes; `''` clears. Change these only when the user asks: they reach every task, not just
+  yours. Running sessions take a new appended prompt when they restart, and a resumed
+  conversation only after it compacts.
 
 ## Following a task
 
@@ -98,9 +124,23 @@ exit, and a usage error prints the command's line.
   project, read the changes there with git (`git -C <worktree> log`, `diff`, `status`), and its PR
   with `gh`. In a folder that isn't a git repository there's no history to read: look at the files,
   read `tasks output`, or ask the task. Don't edit or commit in the worktree while the task is
-  working: it works there.
+  working: it works there. `tasks get` also shows how the task launches: `effort`, `agent`,
+  `addDirs` and `extraArgs`.
+- **Read its PR as Dash sees it** with `dashctl review pr` (overview, checks, changed files) and
+  `dashctl review threads` (unresolved review threads by default), given the task. Without a
+  number they read the PR the task is reviewing. `gh` works as well; drafting review comments is
+  still the task's job.
 - **Hand it to the person** with `dashctl tasks open`, which brings Dash to the front on the task.
   Do that when it waits on a person, or when the user wants to look.
+- **Point the person at a file** with `dashctl show <path> --task-id <task-id>`: the file opens in
+  that task's editor, Markdown and HTML rendered, anything else as code; `--lines 42` or
+  `--lines 10-20` scrolls to and highlights lines, `--source` shows Markdown or HTML as source.
+  It never asks permission. Use it for something the task wrote that the user should read (a
+  plan, a report) or the lines a finding is about. A relative path is read from your own folder,
+  not the task's, so give the absolute path from `tasks get`'s worktree. The file must be in the
+  worktree, the task's scratchpad or the project's memory folder: a vault file can't be shown. It
+  doesn't bring Dash forward or switch tasks: the file is on screen when the person opens the
+  task, so follow it with `tasks open` when they should look now.
 
 ## Talking to a task
 
